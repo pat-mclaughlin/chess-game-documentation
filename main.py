@@ -188,7 +188,7 @@ def game_library(state: State) -> Page:
     organized_library = sort_games(state.sort_option,filter_games(state.search_term,state.search_type,state.library))
     game_buttons = []
     for game_index, game in enumerate(organized_library):
-        game_buttons.append(Button(game.opponent, game_library, Argument("selected_index", game_index)))
+        game_buttons.append(Button(game.opponent, "game_library", Argument("selected_index", game_index)))
     return Page(state,
                 ["Search Term:", TextBox("term"), SelectBox("type",["Opponent", "Date","General Outcome"]),
                 Button("Search", "update_sorting"), "\n",
@@ -206,4 +206,4 @@ def update_sorting(state: State, term: str, type: str, sort: str) -> Page:
     
 
 
-start_server(State([],None,"","",""))
+start_server(State([],Game("",[],True,"","",""),"","",""))
