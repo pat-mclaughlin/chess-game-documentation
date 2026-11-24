@@ -38,7 +38,7 @@ def list_moves(list: list[str]) -> str:
         first_move = split_move[0]
         second_move = split_move[1]
         updated_list.append(str(move_index+1) +". " + first_move + " " + second_move)
-    move_string = "\n".join(updated_list)
+    move_string = "\n".join(updated_list).strip()
     return move_string
         
 def date_to_int(date: str) -> int:
@@ -83,7 +83,7 @@ def sort_games(key: str, list: list[Game]) -> list[Game]:
                     sorted_list[game_index] = sorted_list[game_index+1]
                     sorted_list[game_index+1] = temp
                     change_made = True
-    if key == "Moves":
+    if key == "Num. of Moves":
         while change_made:
             change_made = False
             for game_index in range(0,len(list)-1):
@@ -102,7 +102,7 @@ def filter_games(term: str, type: str, list: list[Game]) -> list[Game]:
         for game in list:
             if term.strip() == game.opponent:
                 filtered_list.append(game)
-    if type == "Outcome":
+    if type == "General Outcome":
         for game in list:
             if term.strip() == game.results:
                 filtered_list.append(game)
@@ -111,12 +111,63 @@ def filter_games(term: str, type: str, list: list[Game]) -> list[Game]:
             if term.strip() == game.date:
                 filtered_list.append(game)
     return filtered_list
+
+def legal_notation(move: str)-> bool:
+    if not move:
+        return False
+    if move == "...":
+        move = ""
+        return True
+    if move == "O-O" or move == "O-O-O" or move == "O-O+" or move == "O-O-O+" or move == "O-O#" or move == "O-O-O#":
+        return True
+    for char in move:
+        if char not in "abcdefgh12345678KQRBNKQRBNx+#=":
+            return False
+    for i, char in enumerate(move):
+        if char in "#+":
+            if i != len(move) -1:
+                return False
+        if char in "12345678":
+            if i == 0:
+                return False
+            if move[i-1] not in "abcdefghKQRBN":
+                return False
+        if char == "=":
+            if i == len(move) - 1:
+                return False
+            if move[i+1] not in "QRBN":
+                return False
+    return True
+def result_stats(games: list[Game])-> list[int]:
+    if not games:
+        return [0,0,0,0]
+    wins = 0
+    losses = 0
+    draws = 0
+    incompletes = 0
+    for game in games:
+        result = game.results
+        if result == "Win":
+            wins +=1
+        elif result == "Loss":
+            losses += 1
+        elif result == "Draw":
+            draws += 1
+        else:
+            incompletes += 1
+    return [wins,losses,draws,incompletes]
+    
+add_description = ("Add moves to your games according to Algebraic Notation.\n"
+                  "If you unsure of how the record a move, visit this website:\n"
+                  "https://www.chess.com/terms/chess-notation\n"
+                   "If you only need to record the first move, type '...' in the second move to add it.")
+                
     
     
 @route
 def index(state: State) -> Page:
     return Page(state, [
-        "Home\n",
+        "Home\n", 
         Button("Library", "game_library"),
         Button("New Game", "new_game")
     ])
@@ -125,7 +176,8 @@ def back(state: State, page: str) -> Page:
     if page == "home":
         return index(state)
     else:
-        return index(state) #Finish
+        return game_library(state) 
+    
 
 @route
 def new_game(state: State) -> Page:
@@ -153,18 +205,24 @@ def add_move(state: State) -> Page:
     else:
         second = "Your Move: "
         first = "Opoonent Move :"
-    return Page(state, [
-        "Moves:\n",
+    return Page(state, [add_description, "\n",
+        "Moves:\n", 
         str(list_moves(state.current_game.moves)), Button("Back", "back", Argument("page","home")), "\n",
-        first, TextBox("first_move"), Button("Next","update_moves"), "\n",
+        first, TextBox("first_move"), Button("Add","update_moves"), "\n",
         second, TextBox("second_move"), Button("Stop Inputting","declare_result")
         ])
+
     
 @route
 def update_moves(state: State, first_move: str, second_move: str) -> Page:
-    combined_move = first_move.strip() + "|" + second_move.strip()
-    state.current_game.moves.append(combined_move)
-    return add_move(state)
+    if legal_notation(first_move.strip()) and legal_notation(second_move.strip()) and first_move.strip() != "...":
+        if second_move.strip() == "...":
+            second_move = ""
+        combined_move = first_move.strip() + "|" + second_move.strip()
+        state.current_game.moves.append(combined_move)
+        return add_move(state)
+    else:
+        return Page(state,["Invalid Notation, Try Again", Button("Ok","add_move")])
 
 @route
 def declare_result(state: State) -> Page:
@@ -188,22 +246,97 @@ def game_library(state: State) -> Page:
     organized_library = sort_games(state.sort_option,filter_games(state.search_term,state.search_type,state.library))
     game_buttons = []
     for game_index, game in enumerate(organized_library):
-        game_buttons.append(Button(game.opponent, "game_library", Argument("selected_index", game_index)))
+        game_buttons.append(Button(game.opponent, "library_select",Argument("selected_index", game_index)))
     return Page(state,
-                ["Search Term:", TextBox("term"), SelectBox("type",["Opponent", "Date","General Outcome"]),
-                Button("Search", "update_sorting"), "\n",
-                 "Filter By: ", SelectBox("sort",["Earliest", "Latest", "Num. of Moves", "Opponent"], state.sort_option), "\n",
-                 Button("Back", "back", Argument("page","home")), "\n"]
-                + game_buttons)
-    
-    
+           ["Search Term:", TextBox("term"), SelectBox("type",["Opponent", "Date","General Outcome"]),
+          Button("Search", "update_sorting"), "\n",
+           "Filter By: ", SelectBox("sort",["Earliest", "Latest", "Num. of Moves", "Opponent"], state.sort_option), Button("Stats","library_stats"), "\n",
+           Button("Back", "back", Argument("page","home")), "\n"]
+           + game_buttons)
+
+        
+        
+   
+  
 @route
 def update_sorting(state: State, term: str, type: str, sort: str) -> Page:
     state.sort_option = sort
     state.search_term = term
     state.search_type = type
     return game_library(state)
+
+@route
+def library_select(state: State, selected_index: int) -> Page:
+    organized_library = sort_games(state.sort_option,filter_games(state.search_term,state.search_type,state.library))
+    state.current_game = organized_library[selected_index]
+    game_select = state.current_game
+    color = "Black"
+    if game_select.is_white:
+        color = "White"
+    return Page(state,[Button("Back", "back", Argument("page","library")), "\n",
+                       "Opponent: ", game_select.opponent, "\n"
+                       "Date: ", game_select.date, "\n",
+                       "Color:", color, "\n",
+                       "Outcome: ", game_select.results, "---", game_select.result_factor, "\n",
+                       "Moves:", "\n",
+                       str(list_moves(game_select.moves))
+                          ])
+@route
+def library_stats(state: State)-> Page:
+    total = 0
+    for game in state.library:
+        total += 1
+    if not total:
+        return Page(state, ["No Games Played!"], Button("Back","back", Argument("page","library")))
+    results = result_stats(state.library)
+    wins = results[0]
+    losses = results[1]
+    draws = results[2]
+    incompletes = results[3]
+    return Page(state,["Total Games: ", total, "\n",
+                       "Completed Games: ", total - incompletes, "\n",
+                       "Inompleted Games: ", incompletes, "\n",
+                       "Wins: ", wins, "\n",
+                       "Losses: ", losses, "\n",
+                       "Draws: ", draws, "\n",
+                       "Win percentage: ", (100*wins)/(total-incompletes), "%"])
+
     
+    
+    
+test_library = [
+    Game(
+        opponent="Alice",
+        moves=["e4|e5", "Nf3|O-O", "Nc6|Bb5#"],
+        is_white=True,
+        results="Win",
+        result_factor="Checkmate",
+        date="2026-11-15"
+    ),
+    Game(
+        opponent="Bob",
+        moves=["d4|Nf6", "c4|g6", "Nc3|Ng4"],
+        is_white=False,
+        results="Loss",
+        result_factor="Timeout",
+        date="2026-11-14"
+    ),
+    Game(
+        opponent="Charlie",
+        moves=["e4|c5", "Nf3|d6", "d4|"],
+        is_white=True,
+        results="Draw",
+        result_factor="Stalemate",
+        date="2026-11-12"
+    ),
+     Game(
+        opponent="Patrick",
+        moves=["e4|K5", "O-O-O|d6", "d4#|"],
+        is_white=False,
+        results="Incomplete",
+        result_factor="Abandonment",
+        date="2006-01-02"
+    )
+]
 
-
-start_server(State([],Game("",[],True,"","",""),"","",""))
+start_server(State(test_library,Game("",[],True,"","",""),"","",""))
